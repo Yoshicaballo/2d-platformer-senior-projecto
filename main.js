@@ -5,6 +5,7 @@
 /* Citations: Copilot - distance formula, key tracking, basic drawing */
 /* Note: If you use significant AI help you should cite that here as well */
 // Copilot was used to finish the gameOver function, distance formulas, dashing function, invulnerability timer, and enemyAttackTimer function
+// Copilot was used to implement jumping controls with gravity and ground collision
 /* including summaries of prompts and/or interactions you had with the AI */
 /* In addition, of course, any AI-generated code should be clearly maked */
 /* in comments throughout the code, though of course when using e.g. CoPilot */
@@ -19,31 +20,26 @@ let gi = new GameInterface();
 
 /* Constants: Named constants to avoid magic numbers */
 const mediumModeStart = 30; // seconds when medium difficulty begins
-const hardModeStart = 60; // seconds when hard difficulty begins
-const maxHearts = 5; // maximum health
-const easyGreenCount = 3; // health pickups in easy mode
-const mediumGreenCount = 1; // health pickups in medium mode
-const hardGreenCount = 1; // health pickups in hard mode
-const easyRedCount = 0; // traps in easy mode
-const mediumRedCount = 1; // traps in medium mode
-const hardRedCount = 4; // traps in hard mode
-const collectibleRadius = 8; // size of collectible circles
 /* Variables: Top-Level variables defined here are used to hold game state */
 //hp amount and invulnerability timer
 let iframe = 0;
 let hearts = 3;
-//player movement shenanigans
-let px = 100;
-let py = 300;
-let ps = 12;
-//enemy x and y positions
-let bx = 750;
-let by = 300;
-let blipy = 0;
-let mbx1 = 0;
-let mbx2 = 0;
-let mby1 = 0;
-let mby2 = 0;
+// Begin AI-generated code: Player controls object
+// Player object holding all position, velocity, and physics parameters
+let playerControls = {
+  x: 100, // horizontal position
+  y: 300, // vertical position
+  vx: 0, // horizontal velocity
+  vy: 0, // vertical velocity
+  speed: 0.5, // horizontal movement speed
+  drag: 0.97, // horizontal drag for smoother stopping
+  gravity: 0.5, // gravity strength - ADJUST THIS to change how fast player falls
+  jumpStrength: -15, // jump velocity (negative because up) - ADJUST THIS to change jump height
+  onGround: false, // track if player is on ground
+  radius: 10, // player drawing radius
+  maxSpeed: 5, // maximum horizontal speed
+};
+// End AI-generated code
 let timeSurvived = 0;
 //enemy attack list and timer
 let enemyAttackTimer = 0;
@@ -59,19 +55,11 @@ const level = [
   { id: 3, active: false },
 ];
 
-
-function resetlevel() {
+function resetLevel() {
   for (let i = 0; i < level.length; i++) {
     level[i].active = false;
   }
 }
-
-function chooseAttack() {
-  resetlevel();
-  const pick = Math.floor(Math.random() * level.length);
-  level[pick].active = true;
-}
-
 function isActive(id) {
   for (let i = 0; i < level.length; i++) {
     if (level[i].id === id) {
@@ -80,61 +68,106 @@ function isActive(id) {
   }
   return false;
 }
-
-// Begin generated code (AI-assisted): spawn collectibles based on difficulty
-function spawnCollectibles(width, height) {
-  greenCircles = [];
-  redCircles = [];
-
-  // Determine difficulty based on time survived
-  let greenCount = easyGreenCount; // default easy
-  let redCount = easyRedCount;
-
-  if (timeSurvived > hardModeStart) {
-    // Hard mode
-    greenCount = hardGreenCount;
-    redCount = hardRedCount;
-  } else if (timeSurvived > mediumModeStart) {
-    // Medium mode
-    greenCount = mediumGreenCount;
-    redCount = mediumRedCount;
-  }
-
-  // Spawn green circles
-  for (let i = 0; i < greenCount; i++) {
-    greenCircles.push({
-      x: Math.random() * (width - 40) + 20,
-      y: Math.random() * (height - 40) + 20,
-      radius: collectibleRadius,
-    });
-  }
-
-  // Spawn red circles
-  for (let i = 0; i < redCount; i++) {
-    redCircles.push({
-      x: Math.random() * (width - 40) + 20,
-      y: Math.random() * (height - 40) + 20,
-      radius: collectibleRadius,
-    });
-  }
-}
-// End generated code
 /* Drawing Functions */
 /* Example drawing function: you can add multiple drawing functions
 that will be called in sequence each frame. It's a good idea to do 
 one function per each object you are putting on screen, and you
 may then want to break your drawing function down into sub-functions
 to make it easier to read/follow */
-gi.addDrawing(function ({ctx, width, height, elapsed, stepTime }) {
+// TODO: Player physics update
+
+gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   // Your drawing code here...
   // draw player
-  
+
   ctx.beginPath();
   ctx.fillStyle = "red";
-  ctx.arc(px, py, 10, 0, Math.PI * 2);
+  ctx.arc(
+    playerControls.x,
+    playerControls.y,
+    playerControls.radius,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
 });
+// - Apply gravity to pull player down
+// - Handle horizontal movement with A/D keys
+// - Allow jumping with W key only when on ground
+// - Check for ground collision at canvas bottom
+// - Prevent player from going outside canvas boundaries
 
+/**
+ * Updates the player's physics and movement each frame.
+ * @param {object} params - The drawing parameters.
+ * @param {number} params.stepTime - Time elapsed since last frame.
+ * @param {number} params.width - Canvas width.
+ * @param {number} params.height - Canvas height.
+ */
+function updatePlayer({ stepTime, width, height }) {
+  // Begin AI-generated code: Player physics implementation
+  // Handle horizontal movement with A/D keys
+  if (
+    !(keysDown.a || keysDown.ArrowLeft || keysDown.d || keysDown.ArrowRight) &&
+    Math.abs(playerControls.vx) < 0.2
+  ) {
+    playerControls.vx = 0;
+  }
+  if (playerControls.vx > playerControls.maxSpeed) {
+    playerControls.vx = playerControls.maxSpeed;
+  }
+  if (playerControls.vx < -playerControls.maxSpeed) {
+    playerControls.vx = -playerControls.maxSpeed;
+  }
+  if (keysDown.a || keysDown.ArrowLeft) {
+    playerControls.vx -= playerControls.speed;
+  }
+  if (keysDown.d || keysDown.ArrowRight) {
+    playerControls.vx += playerControls.speed;
+  }
+
+  // Apply horizontal velocity
+  playerControls.vx *= playerControls.drag; // apply drag for smoother stopping
+  playerControls.x += playerControls.vx;
+
+  // Apply gravity to pull player down
+  playerControls.vy += (playerControls.gravity * stepTime) / 10;
+
+  // Allow jumping with W key only when on ground
+  if ((keysDown.w || keysDown.ArrowUp) && playerControls.onGround) {
+    playerControls.vy = playerControls.jumpStrength;
+    playerControls.onGround = false;
+  }
+
+  // Apply vertical velocity
+  playerControls.y += (playerControls.vy * stepTime) / 10;
+
+  // Check for ground collision at canvas bottom
+  if (playerControls.y >= height - playerControls.radius) {
+    playerControls.y = height - playerControls.radius;
+    playerControls.vy = 0;
+    playerControls.onGround = true;
+  } else {
+    playerControls.onGround = false;
+  }
+
+  // Prevent player from going outside canvas boundaries
+  if (playerControls.x >= width - playerControls.radius) {
+    playerControls.x = width - playerControls.radius;
+  }
+  if (playerControls.x <= playerControls.radius) {
+    playerControls.x = playerControls.radius;
+  }
+  // Optional: top boundary (allow jumping off screen or prevent)
+  if (playerControls.y <= playerControls.radius) {
+    playerControls.y = playerControls.radius;
+    playerControls.vy = 0;
+  }
+  // End AI-generated code
+}
+
+// Call the player update function each frame
+gi.addDrawing(updatePlayer);
 /* Input Handlers */
 
 /* Example: Mouse click handler (you can change to handle 
@@ -168,20 +201,6 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   ctx.font = "20px Arial";
   ctx.fillText(`Health - ${hearts}`, 20, 20);
   ctx.fillText(`Time Survived - ${timeSurvived.toFixed(2)}`, width / 2, 20);
-  if (timeSurvived <= mediumModeStart) {
-    ctx.fillText(`Easy`, 20, 40);
-  } else if (timeSurvived >= mediumModeStart && timeSurvived <= hardModeStart) {
-    ctx.fillStyle = "orange";
-    ctx.fillText(`Medium`, 20, 40);
-    ctx.fillText(`Don't collect the red circles!`, 20, 60);
-  } else {
-    ctx.fillStyle = "red";
-    ctx.fillText(`Hard`, 20, 40);
-  }
-  if (timeSurvived <= mediumModeStart) {
-    ctx.fillStyle = "blue";
-    ctx.fillText(`Use WASD or Arrow keys to move!`, width / 2 - 100, height - 20);
-  }
 });
 
 function damage() {
@@ -190,7 +209,7 @@ function damage() {
     iframe = 100;
   }
 }
-// AI generated code for boss collision detection
+/* --- Example of using distance formula to check for collision between player and boss ---
 gi.addDrawing(function ({ stepTime }) {
   const dxB = px - bx;
   const dyB = py - by;
@@ -200,7 +219,7 @@ gi.addDrawing(function ({ stepTime }) {
   if (distB < playerRadius + bossRadius) {
     damage();
   }
-});
+});*/
 // update invulnerability timer
 function iframeTimer(stepTime) {
   if (iframe > 0) {
@@ -225,101 +244,17 @@ function gameOver(ctx, width, height) {
 gi.addDrawing(function ({ stepTime }) {
   timeSurvived += stepTime / 1000;
 
-  // Begin generated code (AI-assisted): unlock attack 4 after 10 seconds
-  // Add a 4th attack to the array when player survives to medium mode
-  if (timeSurvived > mediumModeStart && !attack4Unlocked) {
-    level.push({ id: 4, active: false });
-    attack4Unlocked = true;
-    console.log("Medium mode unlocked! Attack 4 added to pool.");
-  }
   // End generated code
 });
 // level' data to default positions
-function updateEnemylevel(width, height, stepTime) {
-  iframe = 50;
-  iframeTimer(stepTime);
-  if (!isActive(2)) {
-    blipy = -10;
-  }
-  if (!isActive(1)) {
-    bx = width / 2;
-    by = height / 2;
-  }
-  if (!isActive(3)) {
-    mbx1 = width / 4;
-    mby1 = -20;
-    mbx2 = width / 1.25;
-    mby2 = -20;
-  }
-}
 // attack timer - update the enemy attack timer and select new level
-gi.addDrawing(function ({ stepTime, width, height }) {
-  updateEnemyAttackTimer(stepTime, width, height);
-});
-function updateEnemyAttackTimer(stepTime, width, height) {
-  if (enemyAttackTimer > 0) {
-    enemyAttackTimer -= stepTime / 10;
-  }
-  if (enemyAttackTimer <= 0) {
-    resetlevel();
-    updateEnemylevel(width, height, stepTime);
-    chooseAttack();
-    spawnCollectibles(width, height); // spawn collectibles with each attack
-    enemyAttackTimer = 500;
-  }
-}
-// handle motion in animation code
 
-gi.addDrawing(function ({ stepTime }) {
-  // runs 60 times a second...
-  if (keysDown.w || keysDown.ArrowUp) {
-    // is the w key still down?
-    py -= (ps * 10) / stepTime;
-  }
-});
-gi.addDrawing(function ({ stepTime }) {
-  // runs 60 times a second...
-  if (keysDown.s || keysDown.ArrowDown) {
-    // is the s key still down?
-    py += (ps * 10) / stepTime;
-  }
-});
-gi.addDrawing(function ({ stepTime }) {
-  // runs 60 times a second...
-  if (keysDown.d || keysDown.ArrowRight) {
-    // is the d key still down?
-    px += (ps * 10) / stepTime;
-  }
-});
-gi.addDrawing(function ({ stepTime }) {
-  // runs 60 times a second...
-  if (keysDown.a || keysDown.ArrowLeft) {
-    // is the a key still down?
-    px -= (ps * 10) / stepTime;
-  }
-});
-gi.addDrawing(function ({ stepTime, width, height }) {
-  //speed reset
-  if (ps > 12) {
-    ps -= stepTime / 10;
-    if (ps < 12) {
-      ps = 12;
-    }
-    //boundarys
-  }
-  if (px >= width) {
-    px = width;
-  }
-  if (px <= 0) {
-    px = 0;
-  }
-  if (py >= height) {
-    py = height;
-  }
-  if (py <= 0) {
-    py = 0;
-  }
-});
+if (enemyAttackTimer <= 0) {
+  resetLevel();
+
+  enemyAttackTimer = 500;
+}
+
 // End generated code
 
 /* Run the game */
