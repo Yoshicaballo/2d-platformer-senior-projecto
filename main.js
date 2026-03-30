@@ -13,7 +13,7 @@
 /* should also include a summary here */
 
 import "./style.css";
-
+import "./level.js";
 import { GameInterface } from "simple-canvas-library";
 
 let gi = new GameInterface();
@@ -32,7 +32,7 @@ let playerControls = {
   vx: 0, // horizontal velocity
   vy: 0, // vertical velocity
   speed: 0.5, // horizontal movement speed
-  drag: 0.97, // horizontal drag for smoother stopping
+  drag: 0.96, // horizontal drag for smoother stopping
   gravity: 0.5, // gravity strength - ADJUST THIS to change how fast player falls
   jumpStrength: -15, // jump velocity (negative because up) - ADJUST THIS to change jump height
   onGround: false, // track if player is on ground
