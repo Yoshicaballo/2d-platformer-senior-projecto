@@ -13,10 +13,13 @@
 /* should also include a summary here */
 
 import "./style.css";
-import "./level.js";
+import TileMap from "./level.js";
 import { GameInterface } from "simple-canvas-library";
 
-let gi = new GameInterface();
+const levelMap = new TileMap(64);
+let gi = new GameInterface({
+  canvasSize: { width: levelMap.getWidth(), height: levelMap.getHeight() },
+});
 
 /* Constants: Named constants to avoid magic numbers */
 const mediumModeStart = 30; // seconds when medium difficulty begins
@@ -24,7 +27,6 @@ const mediumModeStart = 30; // seconds when medium difficulty begins
 //hp amount and invulnerability timer
 let iframe = 0;
 let hearts = 3;
-// Begin AI-generated code: Player controls object
 // Player object holding all position, velocity, and physics parameters
 let playerControls = {
   x: 100, // horizontal position
@@ -32,9 +34,9 @@ let playerControls = {
   vx: 0, // horizontal velocity
   vy: 0, // vertical velocity
   speed: 0.5, // horizontal movement speed
-  drag: 0.96, // horizontal drag for smoother stopping
-  gravity: 0.5, // gravity strength - ADJUST THIS to change how fast player falls
-  jumpStrength: -15, // jump velocity (negative because up) - ADJUST THIS to change jump height
+  drag: 0.95, // horizontal drag for smoother stopping
+  gravity: 0.25, // gravity strength - ADJUST THIS to change how fast player falls
+  jumpStrength: -8, // jump velocity (negative because up) - ADJUST THIS to change jump height
   onGround: false, // track if player is on ground
   radius: 10, // player drawing radius
   maxSpeed: 5, // maximum horizontal speed
@@ -42,19 +44,12 @@ let playerControls = {
 // End AI-generated code
 let timeSurvived = 0;
 //enemy attack list and timer
-let enemyAttackTimer = 0;
-let attack4Unlocked = false; // track if hard mode attack is unlocked
-// Begin generated code (AI-assisted): collectible arrays
-let greenCircles = []; // health pickups
-let redCircles = []; // trap circles
-// End generated code
-// Begin generated code (AI-assisted): enemy attack list with iteration
 const level = [
   { id: 1, active: false },
   { id: 2, active: false },
   { id: 3, active: false },
 ];
-
+let enemyAttackTimer = 0;
 function resetLevel() {
   for (let i = 0; i < level.length; i++) {
     level[i].active = false;
@@ -76,10 +71,13 @@ may then want to break your drawing function down into sub-functions
 to make it easier to read/follow */
 // TODO: Player physics update
 
+gi.addDrawing(function ({ ctx }) {
+  levelMap.drawMap(ctx);
+});
+
 gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   // Your drawing code here...
   // draw player
-
   ctx.beginPath();
   ctx.fillStyle = "red";
   ctx.arc(
@@ -91,10 +89,14 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   );
   ctx.fill();
 });
+// We compute the player edge positions each frame and use them for tile collision.
+// The player itself is drawn as a circle, but collision checks treat it like a small box
+// around the circle so we can test against tile rows/columns cleanly.
+
 // - Apply gravity to pull player down
 // - Handle horizontal movement with A/D keys
 // - Allow jumping with W key only when on ground
-// - Check for ground collision at canvas bottom
+// - Check collisions against nearby tiles in the direction of motion
 // - Prevent player from going outside canvas boundaries
 
 /**
@@ -105,7 +107,8 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
  * @param {number} params.height - Canvas height.
  */
 function updatePlayer({ stepTime, width, height }) {
-  // Begin AI-generated code: Player physics implementation
+  const tileSize = levelMap.tileSize;
+
   // Handle horizontal movement with A/D keys
   if (
     !(keysDown.a || keysDown.ArrowLeft || keysDown.d || keysDown.ArrowRight) &&
@@ -126,44 +129,131 @@ function updatePlayer({ stepTime, width, height }) {
     playerControls.vx += playerControls.speed;
   }
 
-  // Apply horizontal velocity
-  playerControls.vx *= playerControls.drag; // apply drag for smoother stopping
+  // Apply horizontal movement first.
+  // This moves the player side-to-side, then checks only the left/right edge
+  // against any solid tiles the player is now overlapping.
+  playerControls.vx *= playerControls.drag;
   playerControls.x += playerControls.vx;
 
-  // Apply gravity to pull player down
-  playerControls.vy += (playerControls.gravity * stepTime) / 10;
+  // Compute the player's current hitbox edges after horizontal movement.
+  // Using +1 / -1 makes the tile collision tests slightly smaller than the full circle.
+  let left = playerControls.x - playerControls.radius + 1;
+  let right = playerControls.x + playerControls.radius - 1;
+  let top = playerControls.y - playerControls.radius + 1;
+  let bottom = playerControls.y + playerControls.radius - 1;
 
-  // Allow jumping with W key only when on ground
+  if (playerControls.vx > 0) {
+    // Moving right: check the right edge of the player against tiles.
+    const col = Math.floor(right / tileSize);
+    const rowTop = Math.floor(top / tileSize);
+    const rowBottom = Math.floor(bottom / tileSize);
+    for (let row = rowTop; row <= rowBottom; row++) {
+      if (
+        levelMap.isSolidTileAt(
+          col * tileSize + 1,
+          row * tileSize + tileSize / 2,
+        )
+      ) {
+        // Snap the player to the left side of the tile and stop horizontal movement.
+        playerControls.x = col * tileSize - playerControls.radius;
+        playerControls.vx = 0;
+        left = playerControls.x - playerControls.radius + 1;
+        right = playerControls.x + playerControls.radius - 1;
+        break;
+      }
+    }
+  } else if (playerControls.vx < 0) {
+    // Moving left: check the left edge of the player against tiles.
+    const col = Math.floor(left / tileSize);
+    const rowTop = Math.floor(top / tileSize);
+    const rowBottom = Math.floor(bottom / tileSize);
+    for (let row = rowTop; row <= rowBottom; row++) {
+      if (
+        levelMap.isSolidTileAt(
+          col * tileSize + tileSize - 1,
+          row * tileSize + tileSize / 2,
+        )
+      ) {
+        // Snap the player to the right side of the tile and stop horizontal movement.
+        playerControls.x = col * tileSize + tileSize + playerControls.radius;
+        playerControls.vx = 0;
+        left = playerControls.x - playerControls.radius + 1;
+        right = playerControls.x + playerControls.radius - 1;
+        break;
+      }
+    }
+  }
+
+  // Gravity and jumping
+  playerControls.vy += (playerControls.gravity * stepTime) / 10;
   if ((keysDown.w || keysDown.ArrowUp) && playerControls.onGround) {
     playerControls.vy = playerControls.jumpStrength;
     playerControls.onGround = false;
   }
+  // collision detection after vertical movement
+  playerControls.y += playerControls.vy;
+  left = playerControls.x - playerControls.radius + 1;
+  right = playerControls.x + playerControls.radius - 1;
+  top = playerControls.y - playerControls.radius + 1;
+  bottom = playerControls.y + playerControls.radius - 1;
+  playerControls.onGround = false;
 
-  // Apply vertical velocity
-  playerControls.y += (playerControls.vy * stepTime) / 10;
-
-  // Check for ground collision at canvas bottom
-  if (playerControls.y >= height - playerControls.radius) {
-    playerControls.y = height - playerControls.radius;
-    playerControls.vy = 0;
-    playerControls.onGround = true;
-  } else {
-    playerControls.onGround = false;
+  if (playerControls.vy >= 0) {
+    // moving down or standing: check the bottom edge for floor tiles
+    const row = Math.floor(bottom / tileSize);
+    const colLeft = Math.floor(left / tileSize);
+    const colRight = Math.floor(right / tileSize);
+    for (let col = colLeft; col <= colRight; col++) {
+      if (
+        levelMap.isSolidTileAt(
+          col * tileSize + tileSize / 2,
+          row * tileSize + 1,
+        )
+      ) {
+        // snap to the top of the floor tile and stop falling
+        playerControls.y = row * tileSize - playerControls.radius;
+        playerControls.vy = 0;
+        playerControls.onGround = true;
+        top = playerControls.y - playerControls.radius + 1;
+        bottom = playerControls.y + playerControls.radius - 1;
+        break;
+      }
+    }
+  } else if (playerControls.vy < 0) {
+    // moving up: check the top edge for ceiling tiles
+    const row = Math.floor(top / tileSize);
+    const colLeft = Math.floor(left / tileSize);
+    const colRight = Math.floor(right / tileSize);
+    for (let col = colLeft; col <= colRight; col++) {
+      if (
+        levelMap.isSolidTileAt(
+          col * tileSize + tileSize / 2,
+          row * tileSize + tileSize - 1,
+        )
+      ) {
+        // snap to below the ceiling tile and stop upward movement
+        playerControls.y = row * tileSize + tileSize + playerControls.radius;
+        playerControls.vy = 0;
+        top = playerControls.y - playerControls.radius + 1;
+        bottom = playerControls.y + playerControls.radius - 1;
+        break;
+      }
+    }
   }
 
-  // Prevent player from going outside canvas boundaries
+  // Prevent player from leaving the screen
   if (playerControls.x >= width - playerControls.radius) {
     playerControls.x = width - playerControls.radius;
+    playerControls.vx = 0;
   }
   if (playerControls.x <= playerControls.radius) {
     playerControls.x = playerControls.radius;
+    playerControls.vx = 0;
   }
-  // Optional: top boundary (allow jumping off screen or prevent)
   if (playerControls.y <= playerControls.radius) {
     playerControls.y = playerControls.radius;
     playerControls.vy = 0;
   }
-  // End AI-generated code
 }
 
 // Call the player update function each frame
