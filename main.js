@@ -27,19 +27,49 @@ const mediumModeStart = 30; // seconds when medium difficulty begins
 //hp amount and invulnerability timer
 let iframe = 0;
 let hearts = 3;
-// Player object holding all position, velocity, and physics parameters
-let playerControls = {
-  x: 100, // horizontal position
-  y: 300, // vertical position
-  vx: 0, // horizontal velocity
-  vy: 0, // vertical velocity
-  speed: 0.5, // horizontal movement speed
-  drag: 0.95, // horizontal drag for smoother stopping
-  gravity: 0.25, // gravity strength - ADJUST THIS to change how fast player falls
-  jumpStrength: -8, // jump velocity (negative because up) - ADJUST THIS to change jump height
-  onGround: false, // track if player is on ground
-  radius: 10, // player drawing radius
-  maxSpeed: 5, // maximum horizontal speed
+// objects object holding all position, velocity, and physics parameters
+let objects = {
+  player: {
+    x: 100, // horizontal position
+    y: 300, // vertical position
+    vx: 0, // horizontal velocity
+    vy: 0, // vertical velocity
+    speed: 0.5, // horizontal movement speed
+    drag: 0.95, // horizontal drag for smoother stopping
+    gravity: 0.25, // gravity strength - ADJUST THIS to change how fast objects falls
+    jumpStrength: -8, // jump velocity (negative because up) - ADJUST THIS to change jump height
+    onGround: false, // track if objects is on ground
+    radius: 10, // objects drawing radius
+    maxSpeed: 5, // maximum horizontal speed
+  },
+  enemy: [
+    {
+      x: 400, // horizontal position
+      y: 300, // vertical position
+      vx: 0, // horizontal velocity
+      vy: 0, // vertical velocity
+      speed: 0.5, // horizontal movement speed
+      drag: 0.95, // horizontal drag for smoother stopping
+      gravity: 0.25, // gravity strength - ADJUST THIS to change how fast objects falls
+      jumpStrength: -8, // jump velocity (negative because up) - ADJUST THIS to change jump height
+      onGround: false, // track if objects is on ground
+      radius: 10, // objects drawing radius
+      maxSpeed: 5, // maximum horizontal speed
+    },
+    {
+      x: 300, // horizontal position
+      y: 200, // vertical position
+      vx: 0, // horizontal velocity
+      vy: 0, // vertical velocity
+      speed: 0.5, // horizontal movement speed
+      drag: 0.95, // horizontal drag for smoother stopping
+      gravity: 0.25, // gravity strength - ADJUST THIS to change how fast objects falls
+      jumpStrength: -8, // jump velocity (negative because up) - ADJUST THIS to change jump height
+      onGround: false, // track if objects is on ground
+      radius: 10, // objects drawing radius
+      maxSpeed: 5, // maximum horizontal speed
+    },
+  ],
 };
 // End AI-generated code
 let timeSurvived = 0;
@@ -69,7 +99,7 @@ that will be called in sequence each frame. It's a good idea to do
 one function per each object you are putting on screen, and you
 may then want to break your drawing function down into sub-functions
 to make it easier to read/follow */
-// TODO: Player physics update
+// TODO: objects physics update
 
 gi.addDrawing(function ({ ctx }) {
   levelMap.drawMap(ctx);
@@ -77,72 +107,83 @@ gi.addDrawing(function ({ ctx }) {
 
 gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   // Your drawing code here...
-  // draw player
+  // draw objects
   ctx.beginPath();
   ctx.fillStyle = "red";
   ctx.arc(
-    playerControls.x,
-    playerControls.y,
-    playerControls.radius,
+    objects.player.x,
+    objects.player.y,
+    objects.player.radius,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = "blue";
+  ctx.arc(
+    objects.enemy[0].x,
+    objects.enemy[0].y,
+    objects.enemy[0].radius,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 });
-// We compute the player edge positions each frame and use them for tile collision.
-// The player itself is drawn as a circle, but collision checks treat it like a small box
+// We compute the objects edge positions each frame and use them for tile collision.
+// The objects itself is drawn as a circle, but collision checks treat it like a small box
 // around the circle so we can test against tile rows/columns cleanly.
 
-// - Apply gravity to pull player down
+// - Apply gravity to pull objects down
 // - Handle horizontal movement with A/D keys
 // - Allow jumping with W key only when on ground
 // - Check collisions against nearby tiles in the direction of motion
-// - Prevent player from going outside canvas boundaries
+// - Prevent objects from going outside canvas boundaries
 
 /**
- * Updates the player's physics and movement each frame.
+ * Updates the objects's physics and movement each frame.
  * @param {object} params - The drawing parameters.
  * @param {number} params.stepTime - Time elapsed since last frame.
  * @param {number} params.width - Canvas width.
  * @param {number} params.height - Canvas height.
  */
-function updatePlayer({ stepTime, width, height }) {
+function updateobjects({ stepTime, width, height }) {
   const tileSize = levelMap.tileSize;
+  const player = objects.player;
 
   // Handle horizontal movement with A/D keys
   if (
     !(keysDown.a || keysDown.ArrowLeft || keysDown.d || keysDown.ArrowRight) &&
-    Math.abs(playerControls.vx) < 0.2
+    Math.abs(player.vx) < 0.2
   ) {
-    playerControls.vx = 0;
+    player.vx = 0;
   }
-  if (playerControls.vx > playerControls.maxSpeed) {
-    playerControls.vx = playerControls.maxSpeed;
+  if (player.vx > player.maxSpeed) {
+    player.vx = player.maxSpeed;
   }
-  if (playerControls.vx < -playerControls.maxSpeed) {
-    playerControls.vx = -playerControls.maxSpeed;
+  if (player.vx < -player.maxSpeed) {
+    player.vx = -player.maxSpeed;
   }
   if (keysDown.a || keysDown.ArrowLeft) {
-    playerControls.vx -= playerControls.speed;
+    player.vx -= player.speed;
   }
   if (keysDown.d || keysDown.ArrowRight) {
-    playerControls.vx += playerControls.speed;
+    player.vx += player.speed;
   }
 
   // Apply horizontal movement first.
   // This moves the player side-to-side, then checks only the left/right edge
   // against any solid tiles the player is now overlapping.
-  playerControls.vx *= playerControls.drag;
-  playerControls.x += playerControls.vx;
+  player.vx *= player.drag;
+  player.x += player.vx;
 
   // Compute the player's current hitbox edges after horizontal movement.
   // Using +1 / -1 makes the tile collision tests slightly smaller than the full circle.
-  let left = playerControls.x - playerControls.radius + 1;
-  let right = playerControls.x + playerControls.radius - 1;
-  let top = playerControls.y - playerControls.radius + 1;
-  let bottom = playerControls.y + playerControls.radius - 1;
+  let left = player.x - player.radius + 1;
+  let right = player.x + player.radius - 1;
+  let top = player.y - player.radius + 1;
+  let bottom = player.y + player.radius - 1;
 
-  if (playerControls.vx > 0) {
+  if (player.vx > 0) {
     // Moving right: check the right edge of the player against tiles.
     const col = Math.floor(right / tileSize);
     const rowTop = Math.floor(top / tileSize);
@@ -155,14 +196,14 @@ function updatePlayer({ stepTime, width, height }) {
         )
       ) {
         // Snap the player to the left side of the tile and stop horizontal movement.
-        playerControls.x = col * tileSize - playerControls.radius;
-        playerControls.vx = 0;
-        left = playerControls.x - playerControls.radius + 1;
-        right = playerControls.x + playerControls.radius - 1;
+        player.x = col * tileSize - player.radius;
+        player.vx = 0;
+        left = player.x - player.radius + 1;
+        right = player.x + player.radius - 1;
         break;
       }
     }
-  } else if (playerControls.vx < 0) {
+  } else if (player.vx < 0) {
     // Moving left: check the left edge of the player against tiles.
     const col = Math.floor(left / tileSize);
     const rowTop = Math.floor(top / tileSize);
@@ -175,30 +216,32 @@ function updatePlayer({ stepTime, width, height }) {
         )
       ) {
         // Snap the player to the right side of the tile and stop horizontal movement.
-        playerControls.x = col * tileSize + tileSize + playerControls.radius;
-        playerControls.vx = 0;
-        left = playerControls.x - playerControls.radius + 1;
-        right = playerControls.x + playerControls.radius - 1;
+        player.x = col * tileSize + tileSize + player.radius;
+        player.vx = 0;
+        left = player.x - player.radius + 1;
+        right = player.x + player.radius - 1;
         break;
       }
     }
   }
 
   // Gravity and jumping
-  playerControls.vy += (playerControls.gravity * stepTime) / 10;
-  if ((keysDown.w || keysDown.ArrowUp) && playerControls.onGround) {
-    playerControls.vy = playerControls.jumpStrength;
-    playerControls.onGround = false;
+  player.vy += (player.gravity * stepTime) / 10;
+  if ((keysDown.w || keysDown.ArrowUp) && player.onGround) {
+    player.vy = player.jumpStrength;
+    player.onGround = false;
   }
-  // collision detection after vertical movement
-  playerControls.y += playerControls.vy;
-  left = playerControls.x - playerControls.radius + 1;
-  right = playerControls.x + playerControls.radius - 1;
-  top = playerControls.y - playerControls.radius + 1;
-  bottom = playerControls.y + playerControls.radius - 1;
-  playerControls.onGround = false;
+  // collision detection for all objects after vertical movement
 
-  if (playerControls.vy >= 0) {
+  player.y += player.vy;
+  // I must change player logic into general objects logic to make it work for all objects
+  left = player.x - player.radius + 1;
+  right = player.x + player.radius - 1;
+  top = player.y - player.radius + 1;
+  bottom = player.y + player.radius - 1;
+  player.onGround = false;
+
+  if (player.vy >= 0) {
     // moving down or standing: check the bottom edge for floor tiles
     const row = Math.floor(bottom / tileSize);
     const colLeft = Math.floor(left / tileSize);
@@ -211,15 +254,15 @@ function updatePlayer({ stepTime, width, height }) {
         )
       ) {
         // snap to the top of the floor tile and stop falling
-        playerControls.y = row * tileSize - playerControls.radius;
-        playerControls.vy = 0;
-        playerControls.onGround = true;
-        top = playerControls.y - playerControls.radius + 1;
-        bottom = playerControls.y + playerControls.radius - 1;
+        player.y = row * tileSize - player.radius;
+        player.vy = 0;
+        player.onGround = true;
+        top = player.y - player.radius + 1;
+        bottom = player.y + player.radius - 1;
         break;
       }
     }
-  } else if (playerControls.vy < 0) {
+  } else if (player.vy < 0) {
     // moving up: check the top edge for ceiling tiles
     const row = Math.floor(top / tileSize);
     const colLeft = Math.floor(left / tileSize);
@@ -232,32 +275,87 @@ function updatePlayer({ stepTime, width, height }) {
         )
       ) {
         // snap to below the ceiling tile and stop upward movement
-        playerControls.y = row * tileSize + tileSize + playerControls.radius;
-        playerControls.vy = 0;
-        top = playerControls.y - playerControls.radius + 1;
-        bottom = playerControls.y + playerControls.radius - 1;
+        player.y = row * tileSize + tileSize + player.radius;
+        player.vy = 0;
+        top = player.y - player.radius + 1;
+        bottom = player.y + player.radius - 1;
         break;
       }
     }
-  }
+    for (let i = 0; i < objects.enemy.length; i++) {
+      const enemy = objects.enemy[i];
+      enemy.vy += (enemy.gravity * stepTime) / 10;
+    
+  
+    enemy.y += enemy.vy;
+    // I must change enemy logic into general objects logic to make it work for all objects
+    left = enemy.x - enemy.radius + 1;
+    right = enemy.x + enemy.radius - 1;
+    top = enemy.y - enemy.radius + 1;
+    bottom = enemy.y + enemy.radius - 1;
+    enemy.onGround = false;
 
+    if (enemy.vy >= 0) {
+      // moving down or standing: check the bottom edge for floor tiles
+      const row = Math.floor(bottom / tileSize);
+      const colLeft = Math.floor(left / tileSize);
+      const colRight = Math.floor(right / tileSize);
+      for (let col = colLeft; col <= colRight; col++) {
+        if (
+          levelMap.isSolidTileAt(
+            col * tileSize + tileSize / 2,
+            row * tileSize + 1,
+          )
+        ) {
+          // snap to the top of the floor tile and stop falling
+          enemy.y = row * tileSize - enemy.radius;
+          enemy.vy = 0;
+          enemy.onGround = true;
+          top = enemy.y - enemy.radius + 1;
+          bottom = enemy.y + enemy.radius - 1;
+          break;
+        }
+      }
+    } else if (enemy.vy < 0) {
+      // moving up: check the top edge for ceiling tiles
+      const row = Math.floor(top / tileSize);
+      const colLeft = Math.floor(left / tileSize);
+      const colRight = Math.floor(right / tileSize);
+      for (let col = colLeft; col <= colRight; col++) {
+        if (
+          levelMap.isSolidTileAt(
+            col * tileSize + tileSize / 2,
+            row * tileSize + tileSize - 1,
+          )
+        ) {
+          // snap to below the ceiling tile and stop upward movement
+          enemy.y = row * tileSize + tileSize + enemy.radius;
+          enemy.vy = 0;
+          top = enemy.y - enemy.radius + 1;
+          bottom = enemy.y + enemy.radius - 1;
+          break;
+        }
+      }
+    }
+  }
+}
   // Prevent player from leaving the screen
-  if (playerControls.x >= width - playerControls.radius) {
-    playerControls.x = width - playerControls.radius;
-    playerControls.vx = 0;
+  if (player.x >= width - player.radius) {
+    player.x = width - player.radius;
+    player.vx = 0;
   }
-  if (playerControls.x <= playerControls.radius) {
-    playerControls.x = playerControls.radius;
-    playerControls.vx = 0;
+  if (player.x <= player.radius) {
+    player.x = player.radius;
+    player.vx = 0;
   }
-  if (playerControls.y <= playerControls.radius) {
-    playerControls.y = playerControls.radius;
-    playerControls.vy = 0;
+  if (player.y <= player.radius) {
+    player.y = player.radius;
+    player.vy = 0;
   }
 }
 
-// Call the player update function each frame
-gi.addDrawing(updatePlayer);
+// Call the objects update function each frame
+gi.addDrawing(updateobjects);
 /* Input Handlers */
 
 /* Example: Mouse click handler (you can change to handle 
@@ -299,14 +397,14 @@ function damage() {
     iframe = 100;
   }
 }
-/* --- Example of using distance formula to check for collision between player and boss ---
+/* --- Example of using distance formula to check for collision between objects and boss ---
 gi.addDrawing(function ({ stepTime }) {
   const dxB = px - bx;
   const dyB = py - by;
   const distB = Math.sqrt(dxB * dxB + dyB * dyB);
-  const playerRadius = 10; // same as drawing radius for player
+  const objectsRadius = 10; // same as drawing radius for objects
   const bossRadius = 50; // boss drawing radius
-  if (distB < playerRadius + bossRadius) {
+  if (distB < objectsRadius + bossRadius) {
     damage();
   }
 });*/
