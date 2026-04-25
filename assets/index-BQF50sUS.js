@@ -1196,7 +1196,8 @@ var TileMap = class {
 					0,
 					0,
 					0,
-					0
+					0,
+					1
 				],
 				[
 					0,
@@ -1205,7 +1206,8 @@ var TileMap = class {
 					0,
 					0,
 					0,
-					0
+					0,
+					1
 				],
 				[
 					0,
@@ -1214,7 +1216,8 @@ var TileMap = class {
 					0,
 					0,
 					0,
-					0
+					0,
+					1
 				],
 				[
 					0,
@@ -1223,7 +1226,8 @@ var TileMap = class {
 					0,
 					0,
 					0,
-					0
+					0,
+					1
 				],
 				[
 					0,
@@ -1232,7 +1236,8 @@ var TileMap = class {
 					0,
 					0,
 					0,
-					0
+					0,
+					1
 				],
 				[
 					0,
@@ -1241,9 +1246,20 @@ var TileMap = class {
 					0,
 					0,
 					0,
-					0
+					0,
+					1
 				],
 				[
+					1,
+					1,
+					1,
+					1,
+					1,
+					1,
+					1,
+					1,
+					1,
+					1,
 					1,
 					1,
 					1,
@@ -2674,4 +2690,4 @@ if (enemyAttackTimer <= 0) {
 gi.run();
 //#endregion
 
-//# sourceMappingURL=index-ntJmBgXN.js.map
+//# sourceMappingURL=index-BQF50sUS.js.map
