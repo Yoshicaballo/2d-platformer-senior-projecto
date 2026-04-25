@@ -29,7 +29,6 @@ const mediumModeStart = 30; // seconds when medium difficulty begins
 /* Variables: Top-Level variables defined here are used to hold game state */
 //hp amount and invulnerability timer
 let iframe = 0;
-let hearts = 3;
 // objects object holding all position, velocity, and physics parameters
 let objects = {
   player: {
@@ -44,6 +43,8 @@ let objects = {
     onGround: false, // track if objects is on ground
     radius: 10, // objects drawing radius
     maxSpeed: 5, // maximum horizontal speed
+    hearts: 3, // player health represented as hearts
+    lives: 3, // player lives
   },
   enemy: [
     {
@@ -76,12 +77,15 @@ let objects = {
     },
   ],
   goal: {
-    x: 700,
-    y: 300,
+    x: 1800,
+    y: 500,
     radius: 10,
   },
 };
 let timeSurvived = 0;
+// enemy start positions for each level
+
+
 //enemy attack list and timer
 const level = [
   { id: 1, active: false },
@@ -158,6 +162,33 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   );
   ctx.fill();
 });
+
+// change goal based on level
+function updateGoal() {
+  switch (currentLevel) {
+    case 1:
+      objects.goal.x = 4750;
+      objects.goal.y = 250;
+      break;
+    case 2:
+      objects.goal.x = 4300;
+      objects.goal.y = 300;
+      break;
+    case 3:
+      objects.goal.x = 1750;
+      objects.goal.y = 370;
+      break;
+    default:
+      objects.goal.x = 1800;
+      objects.goal.y = 900;
+  }
+}
+gi.addDrawing(function ({ stepTime }) {
+  updateGoal();
+});
+// function to update enemy placement in the level upon level change, called in the level change function
+
+
 // We compute the objects edge positions each frame and use them for tile collision.
 // The objects itself is drawn as a circle, but collision checks treat it like a small box
 // around the circle so we can test against tile rows/columns cleanly.
@@ -308,7 +339,58 @@ function updateEnemies({ stepTime, width, height }) {
     }
   }
 }
-
+function goalCollision() {
+  const dx = objects.player.x - objects.goal.x;
+  const dy = objects.player.y - objects.goal.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < objects.player.radius + objects.goal.radius) {
+    // Player reached the goal, reset level or go to next level
+    currentLevel++;
+    levelMap.setLevel(currentLevel);
+    // Reset player position and state
+    switch (currentLevel) {
+      case 2:
+        objects.player.x = 100;
+        objects.player.y = 300;
+        objects.enemy[0].x = 450;
+        objects.enemy[0].y = 280;
+        objects.enemy[1].x = 800;
+        objects.enemy[1].y = 220;
+        break;
+      case 3:
+        objects.player.x = 100;
+        objects.player.y = 300;
+        objects.enemy[0].x = 1300;
+        objects.enemy[0].y = 240;
+        objects.enemy[1].x = 1500;
+        objects.enemy[1].y = 220;
+        break;
+        case 4:
+          objects.player.x = 100;
+          objects.player.y = 300;
+          objects.enemy[0].x = 3000;
+          objects.enemy[0].y = 3000;
+          objects.enemy[1].x = 3000;
+          objects.enemy[1].y = 3000;
+          break;
+      default:
+        currentLevel = 1;
+    objects.player.x = 100;
+    objects.player.y = 300;
+    objects.player.vx = 0;
+    objects.player.vy = 0;
+    objects.player.onGround = false;
+    // Reset enemies and level-specific state
+    
+    resetEnemiesForLevel(currentLevel);
+    resetLevel();
+  }
+}}
+gi.addDrawing(function ({ stepTime }) {
+  updateEnemies({ stepTime });
+  goalCollision();
+  checkEnemyCollision();
+});
 function updateobjects({ stepTime, width, height }) {
   const tileSize = levelMap.tileSize;
   const player = objects.player;
@@ -419,6 +501,15 @@ function updateobjects({ stepTime, width, height }) {
         player.onGround = true;
         top = player.y - player.radius + 1;
         bottom = player.y + player.radius - 1;
+        // Check if standing on spike tile (type 2)
+        const tileType = levelMap.getTileType(
+          col * tileSize + tileSize / 2,
+          row * tileSize + 1,
+        );
+        if (tileType === 2 && iframe <= 0) {
+          objects.player.hearts -= 1;
+          iframe = 100;
+        }
         break;
       }
     }
@@ -501,27 +592,51 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   // Your drawing code here...
   ctx.fillStyle = "green";
   ctx.font = "20px Arial";
-  ctx.fillText(`Health - ${hearts}`, 20, 20);
+  ctx.fillText(`Health - ${objects.player.hearts}`, 20, 20);
   ctx.fillText(`Time - ${timeSurvived.toFixed(2)}`, width / 2, 20);
 });
+// testing x and y
+gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
+  ctx.fillStyle = "blue";
+  ctx.font = "20px Arial";
+  ctx.fillText(`X - ${objects.player.x.toFixed(2)}`, 20, 50);
+  ctx.fillText(`Y - ${objects.player.y.toFixed(2)}`, 20, 80);
+  // tutorial text, never fixed to player position and only appears in level 1
+  if (currentLevel === 1) {
+    ctx.fillStyle = "red";
+    ctx.font = "16px Arial";
+    ctx.fillText(
+      `Use WASD or arrow keys to move and jump. Reach the gold circle to win and never touch purple`,
+      50,
+      height - 20,
+    );
+  } else if (currentLevel > 1 && !currentLevel === 4) {
+    ctx.fillStyle = "red";
+    ctx.font = "16px Arial";
+    ctx.fillText(`Level ${currentLevel}`, width - 100, height - 20);
+  } else  if (currentLevel === 4) {
+    ctx.fillStyle = "red";
+    ctx.font = "16px Arial";
+    ctx.fillText(`You won! Refresh the page to play again.`, 50, height - 20);
+  }
+});
+function checkEnemyCollision() {
+  // AI-generated: collision detection logic between player and enemies
+  for (let i = 0; i < objects.enemy.length; i++) {
+    const enemy = objects.enemy[i];
+    const dx = objects.player.x - enemy.x;
+    const dy = objects.player.y - enemy.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
-function damage() {
-  if (iframe <= 0) {
-    hearts -= 1;
-    iframe = 100;
+    // Check if circles are colliding
+    if (dist < objects.player.radius + enemy.radius) {
+      if (iframe <= 0) {
+        objects.player.hearts -= 1;
+        iframe = 100;
+      }
+    }
   }
 }
-/* --- Example of using distance formula to check for collision between objects and boss ---
-gi.addDrawing(function ({ stepTime }) {
-  const dxB = px - bx;
-  const dyB = py - by;
-  const distB = Math.sqrt(dxB * dxB + dyB * dyB);
-  const objectsRadius = 10; // same as drawing radius for objects
-  const bossRadius = 50; // boss drawing radius
-  if (distB < objectsRadius + bossRadius) {
-    damage();
-  }
-});*/
 // update invulnerability timer
 function iframeTimer(stepTime) {
   if (iframe > 0) {
@@ -533,8 +648,31 @@ function iframeTimer(stepTime) {
 gi.addDrawing(function ({ stepTime }) {
   iframeTimer(stepTime);
 });
+// lose a life if hearts reach 0 or player y is less than or equal to 0 and reset hearts to 3, then check for game over in the next drawing function
+function checkPlayerHealth() {
+  if (objects.player.hearts <= 0 || objects.player.y >= 437) {
+    objects.player.lives -= 1;
+    objects.player.hearts = 3;
+    // reset player position
+    objects.player.x = 100;
+    objects.player.y = 300;
+    objects.player.vx = 0;
+    objects.player.vy = 0;
+    objects.player.onGround = false;
+    // reset enemies and level-specific state
+    resetEnemiesForLevel(currentLevel);
+    resetLevel();
+  }
+}
+gi.addDrawing(function ({ stepTime }) {
+  checkPlayerHealth();
+});
 // execute the game over. Game over!
-
+gi.addDrawing(function ({ ctx, width, height }) {
+  if (objects.player.lives <= 0) {
+    gameOver(ctx, width, height);
+  }
+});
 // game over function
 function gameOver(ctx, width, height) {
   ctx.fillStyle = "grey";
