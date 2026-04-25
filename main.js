@@ -17,8 +17,11 @@ import TileMap from "./level.js";
 import { GameInterface } from "simple-canvas-library";
 
 const levelMap = new TileMap(64);
+let currentLevel = 1;
+levelMap.setLevel(currentLevel);
+
 let gi = new GameInterface({
-  canvasSize: { width: levelMap.getWidth(), height: levelMap.getHeight() },
+  canvasSize: { width: 800, height: 448 },
 });
 
 /* Constants: Named constants to avoid magic numbers */
@@ -55,6 +58,7 @@ let objects = {
       onGround: false, // track if objects is on ground
       radius: 10, // objects drawing radius
       maxSpeed: 5, // maximum horizontal speed
+      direction: 0, // initial direction, 1 right, -1 left
     },
     {
       x: 300, // horizontal position
@@ -68,10 +72,15 @@ let objects = {
       onGround: false, // track if objects is on ground
       radius: 10, // objects drawing radius
       maxSpeed: 5, // maximum horizontal speed
+      direction: 0, // initial direction, 1 right, -1 left
     },
   ],
+  goal: {
+    x: 700,
+    y: 300,
+    radius: 10,
+  },
 };
-// End AI-generated code
 let timeSurvived = 0;
 //enemy attack list and timer
 const level = [
@@ -102,7 +111,7 @@ to make it easier to read/follow */
 // TODO: objects physics update
 
 gi.addDrawing(function ({ ctx }) {
-  levelMap.drawMap(ctx);
+  levelMap.drawMap(ctx, gi.canvas.width, gi.canvas.height);
 });
 
 gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
@@ -111,19 +120,39 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   ctx.beginPath();
   ctx.fillStyle = "red";
   ctx.arc(
-    objects.player.x,
-    objects.player.y,
+    objects.player.x - levelMap.cameraX,
+    objects.player.y - levelMap.cameraY,
     objects.player.radius,
     0,
     Math.PI * 2,
   );
   ctx.fill();
   ctx.beginPath();
-  ctx.fillStyle = "blue";
+  ctx.fillStyle = "purple";
   ctx.arc(
-    objects.enemy[0].x,
-    objects.enemy[0].y,
+    objects.enemy[0].x - levelMap.cameraX,
+    objects.enemy[0].y - levelMap.cameraY,
     objects.enemy[0].radius,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = "purple";
+  ctx.arc(
+    objects.enemy[1].x - levelMap.cameraX,
+    objects.enemy[1].y - levelMap.cameraY,
+    objects.enemy[1].radius,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = "gold";
+  ctx.arc(
+    objects.goal.x - levelMap.cameraX,
+    objects.goal.y - levelMap.cameraY,
+    objects.goal.radius,
     0,
     Math.PI * 2,
   );
@@ -146,6 +175,140 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
  * @param {number} params.width - Canvas width.
  * @param {number} params.height - Canvas height.
  */
+function updateEnemies({ stepTime, width, height }) {
+  const tileSize = levelMap.tileSize;
+  for (let i = 0; i < objects.enemy.length; i++) {
+    const enemy = objects.enemy[i];
+    // Set initial direction towards player
+    if (enemy.direction === 0) {
+      enemy.direction = objects.player.x > enemy.x ? 1 : -1;
+    }
+    // Set horizontal velocity
+    enemy.vx = enemy.speed * enemy.direction;
+    // Apply horizontal movement
+    enemy.x += enemy.vx;
+    // Compute the enemy's current hitbox edges after horizontal movement.
+    let left = enemy.x - enemy.radius + 1;
+    let right = enemy.x + enemy.radius - 1;
+    let top = enemy.y - enemy.radius + 1;
+    let bottom = enemy.y + enemy.radius - 1;
+
+    // Horizontal collision
+    if (enemy.vx > 0) {
+      // Moving right: check the right edge of the enemy against tiles.
+      const col = Math.floor(right / tileSize);
+      const rowTop = Math.floor(top / tileSize);
+      const rowBottom = Math.floor(bottom / tileSize);
+      for (let row = rowTop; row <= rowBottom; row++) {
+        if (
+          levelMap.isSolidTileAt(
+            col * tileSize + 1,
+            row * tileSize + tileSize / 2,
+          )
+        ) {
+          // Snap the enemy to the left side of the tile and reverse direction.
+          enemy.x = col * tileSize - enemy.radius;
+          enemy.vx = 0;
+          enemy.direction *= -1; // Reverse direction
+          left = enemy.x - enemy.radius + 1;
+          right = enemy.x + enemy.radius - 1;
+          break;
+        }
+      }
+    } else if (enemy.vx < 0) {
+      // Moving left: check the left edge of the enemy against tiles.
+      const col = Math.floor(left / tileSize);
+      const rowTop = Math.floor(top / tileSize);
+      const rowBottom = Math.floor(bottom / tileSize);
+      for (let row = rowTop; row <= rowBottom; row++) {
+        if (
+          levelMap.isSolidTileAt(
+            col * tileSize + tileSize - 1,
+            row * tileSize + tileSize / 2,
+          )
+        ) {
+          // Snap the enemy to the right side of the tile and reverse direction.
+          enemy.x = col * tileSize + tileSize + enemy.radius;
+          enemy.vx = 0;
+          enemy.direction *= -1; // Reverse direction
+          left = enemy.x - enemy.radius + 1;
+          right = enemy.x + enemy.radius - 1;
+          break;
+        }
+      }
+    }
+
+    enemy.vy += (enemy.gravity * stepTime) / 10;
+    enemy.y += enemy.vy;
+
+    left = enemy.x - enemy.radius + 1;
+    right = enemy.x + enemy.radius - 1;
+    top = enemy.y - enemy.radius + 1;
+    bottom = enemy.y + enemy.radius - 1;
+    enemy.onGround = false;
+
+    if (enemy.vy >= 0) {
+      // moving down or standing: check the bottom edge for floor tiles
+      const row = Math.floor(bottom / tileSize);
+      const colLeft = Math.floor(left / tileSize);
+      const colRight = Math.floor(right / tileSize);
+      for (let col = colLeft; col <= colRight; col++) {
+        if (
+          levelMap.isSolidTileAt(
+            col * tileSize + tileSize / 2,
+            row * tileSize + 1,
+          )
+        ) {
+          // snap to the top of the floor tile and stop falling
+          enemy.y = row * tileSize - enemy.radius;
+          enemy.vy = 0;
+          enemy.onGround = true;
+          top = enemy.y - enemy.radius + 1;
+          bottom = enemy.y + enemy.radius - 1;
+          break;
+        }
+      }
+    } else if (enemy.vy < 0) {
+      // moving up: check the top edge for ceiling tiles
+      const row = Math.floor(top / tileSize);
+      const colLeft = Math.floor(left / tileSize);
+      const colRight = Math.floor(right / tileSize);
+      for (let col = colLeft; col <= colRight; col++) {
+        if (
+          levelMap.isSolidTileAt(
+            col * tileSize + tileSize / 2,
+            row * tileSize + tileSize - 1,
+          )
+        ) {
+          // snap to below the ceiling tile and stop upward movement
+          enemy.y = row * tileSize + tileSize + enemy.radius;
+          enemy.vy = 0;
+          top = enemy.y - enemy.radius + 1;
+          bottom = enemy.y + enemy.radius - 1;
+          break;
+        }
+      }
+    }
+    // Prevent enemy from leaving the level bounds
+    if (enemy.x >= levelMap.getWidth() - enemy.radius) {
+      enemy.x = levelMap.getWidth() - enemy.radius;
+      enemy.direction *= -1;
+    }
+    if (enemy.x <= enemy.radius) {
+      enemy.x = enemy.radius;
+      enemy.direction *= -1;
+    }
+    if (enemy.y <= enemy.radius) {
+      enemy.y = enemy.radius;
+      enemy.vy = 0;
+    }
+    if (enemy.y >= levelMap.getHeight() - enemy.radius) {
+      enemy.y = levelMap.getHeight() - enemy.radius;
+      enemy.vy = 0;
+    }
+  }
+}
+
 function updateobjects({ stepTime, width, height }) {
   const tileSize = levelMap.tileSize;
   const player = objects.player;
@@ -169,10 +332,7 @@ function updateobjects({ stepTime, width, height }) {
   if (keysDown.d || keysDown.ArrowRight) {
     player.vx += player.speed;
   }
-
-  // Apply horizontal movement first.
-  // This moves the player side-to-side, then checks only the left/right edge
-  // against any solid tiles the player is now overlapping.
+  //slow down player with drag and move horizontally
   player.vx *= player.drag;
   player.x += player.vx;
 
@@ -282,66 +442,10 @@ function updateobjects({ stepTime, width, height }) {
         break;
       }
     }
-    for (let i = 0; i < objects.enemy.length; i++) {
-      const enemy = objects.enemy[i];
-      enemy.vy += (enemy.gravity * stepTime) / 10;
-    
-  
-    enemy.y += enemy.vy;
-    // I must change enemy logic into general objects logic to make it work for all objects
-    left = enemy.x - enemy.radius + 1;
-    right = enemy.x + enemy.radius - 1;
-    top = enemy.y - enemy.radius + 1;
-    bottom = enemy.y + enemy.radius - 1;
-    enemy.onGround = false;
-
-    if (enemy.vy >= 0) {
-      // moving down or standing: check the bottom edge for floor tiles
-      const row = Math.floor(bottom / tileSize);
-      const colLeft = Math.floor(left / tileSize);
-      const colRight = Math.floor(right / tileSize);
-      for (let col = colLeft; col <= colRight; col++) {
-        if (
-          levelMap.isSolidTileAt(
-            col * tileSize + tileSize / 2,
-            row * tileSize + 1,
-          )
-        ) {
-          // snap to the top of the floor tile and stop falling
-          enemy.y = row * tileSize - enemy.radius;
-          enemy.vy = 0;
-          enemy.onGround = true;
-          top = enemy.y - enemy.radius + 1;
-          bottom = enemy.y + enemy.radius - 1;
-          break;
-        }
-      }
-    } else if (enemy.vy < 0) {
-      // moving up: check the top edge for ceiling tiles
-      const row = Math.floor(top / tileSize);
-      const colLeft = Math.floor(left / tileSize);
-      const colRight = Math.floor(right / tileSize);
-      for (let col = colLeft; col <= colRight; col++) {
-        if (
-          levelMap.isSolidTileAt(
-            col * tileSize + tileSize / 2,
-            row * tileSize + tileSize - 1,
-          )
-        ) {
-          // snap to below the ceiling tile and stop upward movement
-          enemy.y = row * tileSize + tileSize + enemy.radius;
-          enemy.vy = 0;
-          top = enemy.y - enemy.radius + 1;
-          bottom = enemy.y + enemy.radius - 1;
-          break;
-        }
-      }
-    }
   }
-}
-  // Prevent player from leaving the screen
-  if (player.x >= width - player.radius) {
-    player.x = width - player.radius;
+  // Prevent player from leaving the level
+  if (player.x >= levelMap.getWidth() - player.radius) {
+    player.x = levelMap.getWidth() - player.radius;
     player.vx = 0;
   }
   if (player.x <= player.radius) {
@@ -352,6 +456,16 @@ function updateobjects({ stepTime, width, height }) {
     player.y = player.radius;
     player.vy = 0;
   }
+  if (player.y >= levelMap.getHeight() - player.radius) {
+    player.y = levelMap.getHeight() - player.radius;
+    player.vy = 0;
+  }
+
+  // Update enemies
+  updateEnemies({ stepTime, width, height });
+
+  // Update camera
+  levelMap.updateCamera(objects.player.x, objects.player.y, width, height);
 }
 
 // Call the objects update function each frame
@@ -388,7 +502,7 @@ gi.addDrawing(function ({ ctx, width, height, elapsed, stepTime }) {
   ctx.fillStyle = "green";
   ctx.font = "20px Arial";
   ctx.fillText(`Health - ${hearts}`, 20, 20);
-  ctx.fillText(`Time Survived - ${timeSurvived.toFixed(2)}`, width / 2, 20);
+  ctx.fillText(`Time - ${timeSurvived.toFixed(2)}`, width / 2, 20);
 });
 
 function damage() {
