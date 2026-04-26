@@ -2488,8 +2488,6 @@ function goalCollision() {
 				objects.player.vx = 0;
 				objects.player.vy = 0;
 				objects.player.onGround = false;
-				resetEnemiesForLevel(currentLevel);
-				resetLevel();
 		}
 	}
 }
@@ -2664,8 +2662,6 @@ function checkPlayerHealth() {
 		objects.player.vx = 0;
 		objects.player.vy = 0;
 		objects.player.onGround = false;
-		resetEnemiesForLevel(currentLevel);
-		resetLevel();
 	}
 }
 gi.addDrawing(function({ stepTime }) {
@@ -2690,4 +2686,4 @@ if (enemyAttackTimer <= 0) {
 gi.run();
 //#endregion
 
-//# sourceMappingURL=index-BQF50sUS.js.map
+//# sourceMappingURL=index-CQGufLgv.js.map
