@@ -380,10 +380,6 @@ function goalCollision() {
     objects.player.vx = 0;
     objects.player.vy = 0;
     objects.player.onGround = false;
-    // Reset enemies and level-specific state
-    
-    resetEnemiesForLevel(currentLevel);
-    resetLevel();
   }
 }}
 gi.addDrawing(function ({ stepTime }) {
@@ -659,9 +655,6 @@ function checkPlayerHealth() {
     objects.player.vx = 0;
     objects.player.vy = 0;
     objects.player.onGround = false;
-    // reset enemies and level-specific state
-    resetEnemiesForLevel(currentLevel);
-    resetLevel();
   }
 }
 gi.addDrawing(function ({ stepTime }) {
